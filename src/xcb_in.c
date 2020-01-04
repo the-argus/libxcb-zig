@@ -1025,6 +1025,7 @@ int _xcb_in_read(xcb_connection_t *c)
             }
         }
 #endif
+        c->in.total_read += n;
         c->in.queue_len += n;
     }
     while(read_packet(c))
