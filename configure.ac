@@ -51,7 +51,11 @@ AC_SUBST(HTML_CHECK_RESULT)
 
 # Checks for pkg-config packages
 PKG_CHECK_MODULES(XCBPROTO, xcb-proto >= 1.13)
-NEEDED="pthread-stubs xau >= 0.99.2"
+NEEDED="xau >= 0.99.2"
+case $host_os in
+linux*) ;;
+     *) NEEDED="$NEEDED pthread-stubs" ;;
+esac
 PKG_CHECK_MODULES(NEEDED, $NEEDED)
 
 have_xdmcp="no"
