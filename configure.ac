@@ -11,7 +11,7 @@ AC_CONFIG_SRCDIR([xcb.pc.in])
 AC_CONFIG_HEADERS([src/config.h])
 
 # Initialize Automake
-AM_INIT_AUTOMAKE([foreign dist-bzip2])
+AM_INIT_AUTOMAKE([foreign dist-xz])
 AM_PATH_PYTHON([2.6])
 
 # Set common system defines for POSIX extensions, such as _GNU_SOURCE
