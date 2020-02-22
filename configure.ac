@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 # Initialize Autoconf
 AC_PREREQ([2.60])
-AC_INIT([libxcb],[1.13.1],
+AC_INIT([libxcb],[1.14],
         [https://gitlab.freedesktop.org/xorg/lib/libxcb/issues],
         [libxcb])
 AC_CONFIG_AUX_DIR([build-aux])
@@ -50,7 +50,7 @@ fi
 AC_SUBST(HTML_CHECK_RESULT)
 
 # Checks for pkg-config packages
-PKG_CHECK_MODULES(XCBPROTO, xcb-proto >= 1.13)
+PKG_CHECK_MODULES(XCBPROTO, xcb-proto >= 1.14)
 NEEDED="xau >= 0.99.2"
 case $host_os in
 linux*) ;;
