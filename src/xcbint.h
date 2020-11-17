@@ -83,8 +83,8 @@ typedef struct _xcb_map _xcb_map;
 
 _xcb_map *_xcb_map_new(void);
 void _xcb_map_delete(_xcb_map *q, xcb_list_free_func_t do_free);
-int _xcb_map_put(_xcb_map *q, unsigned int key, void *data);
-void *_xcb_map_remove(_xcb_map *q, unsigned int key);
+int _xcb_map_put(_xcb_map *q, uint64_t key, void *data);
+void *_xcb_map_remove(_xcb_map *q, uint64_t key);
 
 
 /* xcb_out.c */
