@@ -736,11 +736,16 @@ xcb_generic_error_t *xcb_request_check(xcb_connection_t *c, xcb_void_cookie_t co
         return 0;
     pthread_mutex_lock(&c->iolock);
     request = widen(c, cookie.sequence);
-    if(XCB_SEQUENCE_COMPARE(request, >=, c->in.request_expected)
-       && XCB_SEQUENCE_COMPARE(request, >, c->in.request_completed))
+    if (XCB_SEQUENCE_COMPARE(request, >, c->in.request_completed))
     {
-        _xcb_out_send_sync(c);
-        _xcb_out_flush_to(c, c->out.request);
+        if(XCB_SEQUENCE_COMPARE(request, >=, c->in.request_expected))
+        {
+            _xcb_out_send_sync(c);
+        }
+        if (XCB_SEQUENCE_COMPARE(request, >=, c->out.request_expected_written))
+        {
+            _xcb_out_flush_to(c, c->out.request);
+        }
     }
     reply = wait_for_reply(c, request, &ret);
     assert(!reply);

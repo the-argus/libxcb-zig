@@ -113,6 +113,7 @@ typedef struct _xcb_out {
 
     uint64_t request;
     uint64_t request_written;
+    uint64_t request_expected_written;
     uint64_t total_written;
 
     pthread_mutex_t reqlenlock;

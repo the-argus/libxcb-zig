@@ -447,6 +447,7 @@ int _xcb_out_init(_xcb_out *out)
 
     out->request = 0;
     out->request_written = 0;
+    out->request_expected_written = 0;
 
     if(pthread_mutex_init(&out->reqlenlock, 0))
         return 0;
@@ -467,6 +468,7 @@ int _xcb_out_send(xcb_connection_t *c, struct iovec *vector, int count)
     while(ret && count)
         ret = _xcb_conn_wait(c, &c->out.cond, &vector, &count);
     c->out.request_written = c->out.request;
+    c->out.request_expected_written = c->in.request_expected;
     pthread_cond_broadcast(&c->out.cond);
     _xcb_in_wake_up_next_reader(c);
     return ret;
