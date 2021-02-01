@@ -51,7 +51,11 @@ extern "C" {
  * @file xcb.h
  */
 
+#ifdef __GNUC__
 #define XCB_PACKED __attribute__((__packed__))
+#else
+#define XCB_PACKED
+#endif
 
 /**
  * @defgroup XCB_Core_API XCB Core API

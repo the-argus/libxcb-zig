@@ -32,7 +32,6 @@
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -48,7 +47,9 @@
 
 #ifdef _WIN32
 #include "xcb_windefs.h"
+#include <io.h>
 #else
+#include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #endif /* _WIN32 */
@@ -345,7 +346,11 @@ xcb_connection_t *xcb_connect_to_fd(int fd, xcb_auth_info_t *auth_info)
 
     c = calloc(1, sizeof(xcb_connection_t));
     if(!c) {
+#ifdef _WIN32
+        closesocket(fd);
+#else
         close(fd);
+#endif
         return _xcb_conn_ret_error(XCB_CONN_CLOSED_MEM_INSUFFICIENT) ;
     }
 
@@ -378,7 +383,11 @@ void xcb_disconnect(xcb_connection_t *c)
 
     /* disallow further sends and receives */
     shutdown(c->fd, SHUT_RDWR);
+#ifdef _WIN32
+    closesocket(c->fd);
+#else
     close(c->fd);
+#endif
 
     pthread_mutex_destroy(&c->iolock);
     _xcb_in_destroy(&c->in);

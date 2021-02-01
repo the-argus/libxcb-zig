@@ -32,7 +32,6 @@
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <stdio.h>
 #include <errno.h>
 
@@ -40,6 +39,7 @@
 #include <poll.h>
 #endif
 #ifndef _WIN32
+#include <unistd.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #endif
@@ -365,7 +365,7 @@ static void free_reply_list(struct reply_list *head)
     }
 }
 
-static int read_block(const int fd, void *buf, const ssize_t len)
+static int read_block(const int fd, void *buf, const intptr_t len)
 {
     int done = 0;
     while(done < len)
