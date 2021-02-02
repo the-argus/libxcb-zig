@@ -212,33 +212,47 @@ static int read_setup(xcb_connection_t *c)
 /* precondition: there must be something for us to write. */
 static int write_vec(xcb_connection_t *c, struct iovec **vector, int *count)
 {
+#ifndef _WIN32
     int n;
+#endif
+
     assert(!c->out.queue_len);
 
 #ifdef _WIN32
-    int i = 0;
-    int ret = 0,err = 0;
-    struct iovec *vec;
-    n = 0;
-
     /* Could use the WSASend win32 function for scatter/gather i/o but setting up the WSABUF struct from
        an iovec would require more work and I'm not sure of the benefit....works for now */
-    vec = *vector;
-    while(i < *count)
+    while (*count)
     {
-         ret = send(c->fd,vec->iov_base,vec->iov_len,0);
-         if(ret == SOCKET_ERROR)
-         {
-             err  = WSAGetLastError();
-             if(err == WSAEWOULDBLOCK)
-             {
-                 return 1;
-             }
-         }
-         n += ret;
-         *vec++;
-         i++;
+        struct iovec *vec = *vector;
+        if (vec->iov_len)
+        {
+            int ret = send(c->fd, vec->iov_base, vec->iov_len, 0);
+            if (ret == SOCKET_ERROR)
+            {
+                int err = WSAGetLastError();
+                if (err == WSAEWOULDBLOCK)
+                {
+                    return 1;
+                }
+            }
+            if (ret <= 0)
+            {
+                _xcb_conn_shutdown(c, XCB_CONN_ERROR);
+                return 0;
+            }
+            c->out.total_written += ret;
+            vec->iov_len -= ret;
+            vec->iov_base = (char *)vec->iov_base + ret;
+        }
+        if (vec->iov_len == 0) {
+            (*vector)++;
+            (*count)--;
+        }
     }
+
+    if (!*count)
+        *vector = 0;
+
 #else
     n = *count;
     if (n > IOV_MAX)
@@ -280,8 +294,6 @@ static int write_vec(xcb_connection_t *c, struct iovec **vector, int *count)
             return 1;
     }
 
-#endif /* _WIN32 */
-
     if(n <= 0)
     {
         _xcb_conn_shutdown(c, XCB_CONN_ERROR);
@@ -303,6 +315,9 @@ static int write_vec(xcb_connection_t *c, struct iovec **vector, int *count)
     if(!*count)
         *vector = 0;
     assert(n == 0);
+
+#endif /* _WIN32 */
+
     return 1;
 }
 
