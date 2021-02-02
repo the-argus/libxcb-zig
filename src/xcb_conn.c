@@ -170,6 +170,8 @@ static int write_setup(xcb_connection_t *c, xcb_auth_info_t *auth_info)
 
 static int read_setup(xcb_connection_t *c)
 {
+    const char newline = '\n';
+
     /* Read the server response */
     c->setup = malloc(sizeof(xcb_setup_generic_t));
     if(!c->setup)
@@ -195,6 +197,7 @@ static int read_setup(xcb_connection_t *c)
         {
             xcb_setup_failed_t *setup = (xcb_setup_failed_t *) c->setup;
             write(STDERR_FILENO, xcb_setup_failed_reason(setup), xcb_setup_failed_reason_length(setup));
+            write(STDERR_FILENO, &newline, 1);
             return 0;
         }
 
@@ -202,6 +205,7 @@ static int read_setup(xcb_connection_t *c)
         {
             xcb_setup_authenticate_t *setup = (xcb_setup_authenticate_t *) c->setup;
             write(STDERR_FILENO, xcb_setup_authenticate_reason(setup), xcb_setup_authenticate_reason_length(setup));
+            write(STDERR_FILENO, &newline, 1);
             return 0;
         }
     }
