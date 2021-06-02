@@ -134,6 +134,7 @@ static Xauth *get_authptr(struct sockaddr *sockname, int display)
         }
         addr += 12;
         /* if v4-mapped, fall through. */
+        XCB_ALLOW_FALLTHRU
 #endif
     case AF_INET:
         if(!addr)

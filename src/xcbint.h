@@ -38,6 +38,16 @@
 #pragma GCC visibility push(hidden)
 #endif
 
+#ifndef __has_attribute
+# define __has_attribute(x) 0  /* Compatibility with older compilers. */
+#endif
+
+#if __has_attribute(fallthrough)
+# define XCB_ALLOW_FALLTHRU __attribute__ ((fallthrough));
+#else
+# define XCB_ALLOW_FALLTHRU /* FALLTHRU */
+#endif
+
 enum workarounds {
     WORKAROUND_NONE,
     WORKAROUND_GLX_GET_FB_CONFIGS_BUG,
