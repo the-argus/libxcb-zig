@@ -966,18 +966,15 @@ def _c_get_additional_type_params(type):
         param_fields, wire_fields, params = get_serialize_params('sizeof', type)
         return params[1:]
 
-def _c_serialize_helper_list_field(context, self, field,
-                                   code_lines, temp_vars,
-                                   space, prefix):
+
+def _c_get_field_mapping_for_expr(self, expr, prefix):
     """
-    helper function to cope with lists of variable length
+    helper function to get field mapping of a particular expression.
     """
-    expr = field.type.expr
-    prefix_str = _c_helper_fieldaccess_expr(prefix)
     param_fields, wire_fields, params = get_serialize_params('sizeof', self)
     param_names = [p[2] for p in params]
 
-    expr_fields_names = get_expr_field_names(field.type.expr)
+    expr_fields_names = get_expr_field_names(expr)
     resolved = [x for x in expr_fields_names if x in param_names]
     unresolved = [x for x in expr_fields_names if x not in param_names]
 
@@ -996,6 +993,21 @@ def _c_serialize_helper_list_field(context, self, field,
         unresolved = [x for x in unresolved if x not in field_mapping]
         if len(unresolved)>0:
             raise Exception('could not resolve the length fields required for list %s' % field.c_field_name)
+
+    return field_mapping
+
+
+def _c_serialize_helper_list_field(context, self, field,
+                                   code_lines, temp_vars,
+                                   space, prefix):
+    """
+    helper function to cope with lists of variable length
+    """
+    expr = field.type.expr
+    prefix_str = _c_helper_fieldaccess_expr(prefix)
+
+    field_mapping = _c_get_field_mapping_for_expr(self, field.type.expr, prefix)
+
     if expr.op == 'calculate_len':
         list_length = field.type.expr.lenfield_name
     else:
