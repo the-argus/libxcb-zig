@@ -1417,6 +1417,16 @@ def _c_serialize(context, self):
 
     elif 'sizeof' == context:
         param_names = [p[2] for p in params]
+        if self.length_expr is not None:
+            _c('    const %s *_aux = (%s *)_buffer;', self.c_type, self.c_type)
+            prefix = [('_aux', '->', self)]
+
+            field_mapping = _c_get_field_mapping_for_expr(self, self.length_expr, prefix)
+
+            _c('    return %s;', _c_accessor_get_expr(self.length_expr, field_mapping))
+            _c('}')
+            _c_pre.redirect_end()
+            return
         if self.is_switch:
             # switch: call _unpack()
             _c('    %s _aux;', self.c_type)
