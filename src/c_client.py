@@ -977,7 +977,7 @@ def _c_serialize_helper_list_field(context, self, field,
     param_fields, wire_fields, params = get_serialize_params('sizeof', self)
     param_names = [p[2] for p in params]
 
-    expr_fields_names = [f.field_name for f in get_expr_fields(field.type)]
+    expr_fields_names = get_expr_field_names(field.type.expr)
     resolved = [x for x in expr_fields_names if x in param_names]
     unresolved = [x for x in expr_fields_names if x not in param_names]
 
