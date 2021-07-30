@@ -649,39 +649,42 @@ def _c_helper_resolve_field_names (prefix):
 
     return all_fields
 
+
+def get_expr_field_names(expr):
+    """
+    returns a list of field names referenced in an expression
+    """
+    if expr.op is None or expr.op == 'calculate_len':
+        if expr.lenfield_name is not None:
+            return [expr.lenfield_name]
+        # constant value expr
+        return []
+
+    if expr.op == '~':
+        return get_expr_field_names(expr.rhs)
+    if expr.op == 'popcount':
+        return get_expr_field_names(expr.rhs)
+    if expr.op == 'sumof':
+        # sumof expr references another list,
+        # we need that list's length field here
+        field = None
+        for f in expr.lenfield_parent.fields:
+            if f.field_name == expr.lenfield_name:
+                field = f
+                break
+        if field is None:
+            raise Exception("list field '%s' referenced by sumof not found" % expr.lenfield_name)
+        # referenced list + its length field
+        return [expr.lenfield_name] + get_expr_field_names(field.type.expr)
+    if expr.op == 'enumref':
+        return []
+    return get_expr_field_names(expr.lhs) + get_expr_field_names(expr.rhs)
+
+
 def get_expr_fields(self):
     """
     get the Fields referenced by switch or list expression
     """
-    def get_expr_field_names(expr):
-        if expr.op is None or expr.op == 'calculate_len':
-            if expr.lenfield_name is not None:
-                return [expr.lenfield_name]
-            else:
-                # constant value expr
-                return []
-        else:
-            if expr.op == '~':
-                return get_expr_field_names(expr.rhs)
-            elif expr.op == 'popcount':
-                return get_expr_field_names(expr.rhs)
-            elif expr.op == 'sumof':
-                # sumof expr references another list,
-                # we need that list's length field here
-                field = None
-                for f in expr.lenfield_parent.fields:
-                    if f.field_name == expr.lenfield_name:
-                        field = f
-                        break
-                if field is None:
-                    raise Exception("list field '%s' referenced by sumof not found" % expr.lenfield_name)
-                # referenced list + its length field
-                return [expr.lenfield_name] + get_expr_field_names(field.type.expr)
-            elif expr.op == 'enumref':
-                return []
-            else:
-                return get_expr_field_names(expr.lhs) + get_expr_field_names(expr.rhs)
-    # get_expr_field_names()
 
     # resolve the field names with the parent structure(s)
     unresolved_fields_names = get_expr_field_names(self.expr)
