@@ -239,9 +239,15 @@ static int read_packet(xcb_connection_t *c)
         if(pend && pend->workaround == WORKAROUND_GLX_GET_FB_CONFIGS_BUG)
         {
             uint32_t *p = (uint32_t *) c->in.queue;
-            genrep.length = p[2] * p[3] * 2;
+            uint64_t new_length = ((uint64_t)p[2]) * ((uint64_t)p[3]);
+            if(new_length >= (UINT32_MAX / UINT32_C(16)))
+            {
+                _xcb_conn_shutdown(c, XCB_CONN_CLOSED_MEM_INSUFFICIENT);
+                return 0;
+            }
+            genrep.length = (uint32_t)(new_length * UINT64_C(2));
         }
-        length += genrep.length * 4;
+        length += genrep.length * UINT64_C(4);
 
         /* XXX a bit of a hack -- we "know" that all FD replys place
          * the number of fds in the pad0 byte */
@@ -251,7 +257,7 @@ static int read_packet(xcb_connection_t *c)
 
     /* XGE events may have sizes > 32 */
     if ((genrep.response_type & 0x7f) == XCB_XGE_EVENT)
-        eventlength = genrep.length * 4;
+        eventlength = genrep.length * UINT64_C(4);
 
     bufsize = length + eventlength + nfd * sizeof(int)  +
         (genrep.response_type == XCB_REPLY ? 0 : sizeof(uint32_t));
