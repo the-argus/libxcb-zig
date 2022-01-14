@@ -458,8 +458,9 @@ int _xcb_out_init(_xcb_out *out)
 
 void _xcb_out_destroy(_xcb_out *out)
 {
-    pthread_cond_destroy(&out->cond);
     pthread_mutex_destroy(&out->reqlenlock);
+    pthread_cond_destroy(&out->cond);
+    pthread_cond_destroy(&out->socket_cond);
 }
 
 int _xcb_out_send(xcb_connection_t *c, struct iovec *vector, int count)
