@@ -221,6 +221,7 @@ esac
 
 XCB_EXTENSION(Composite, yes)
 XCB_EXTENSION(Damage, yes)
+XCB_EXTENSION(Dbe, yes)
 XCB_EXTENSION(DPMS, yes)
 XCB_EXTENSION(DRI2, yes)
 XCB_EXTENSION(DRI3, $have_sendmsg)
@@ -273,6 +274,7 @@ AC_CONFIG_FILES([
 xcb.pc
 xcb-composite.pc
 xcb-damage.pc
+xcb-dbe.pc
 xcb-dpms.pc
 xcb-dri2.pc
 xcb-dri3.pc
@@ -321,6 +323,7 @@ echo ""
 echo "  X11 extensions"
 echo "    Composite...........: ${BUILD_COMPOSITE}"
 echo "    Damage..............: ${BUILD_DAMAGE}"
+echo "    Dbe.................: ${BUILD_DBE}"
 echo "    Dpms................: ${BUILD_DPMS}"
 echo "    Dri2................: ${BUILD_DRI2}"
 echo "    Dri3................: ${BUILD_DRI3}"
