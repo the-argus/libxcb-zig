@@ -50,7 +50,7 @@ fi
 AC_SUBST(HTML_CHECK_RESULT)
 
 # Checks for pkg-config packages
-PKG_CHECK_MODULES(XCBPROTO, xcb-proto >= 1.14)
+PKG_CHECK_MODULES(XCBPROTO, xcb-proto >= 1.15.1)
 NEEDED="xau >= 0.99.2"
 case $host_os in
 linux*) ;;
