@@ -60,9 +60,7 @@
 # include <sys/stat.h>
 #endif
 
-#ifdef HAVE_LAUNCHD
 #include <sys/stat.h>
-#endif
 
 int xcb_popcount(uint32_t mask)
 {
@@ -82,7 +80,6 @@ int xcb_sumof(uint8_t *list, int len)
   return s;
 }
 
-#ifdef HAVE_LAUNCHD
 /* Return true and parse if name matches <path to socket>[.<screen>]
  * Upon success:
  *     host = <path to socket>
@@ -95,9 +92,15 @@ static int _xcb_parse_display_path_to_socket(const char *name, char **host, char
 {
     struct stat sbuf;
     char path[PATH_MAX];
+    size_t len;
     int _screen = 0;
 
-    strlcpy(path, name, sizeof(path));
+    if (name[0] != '/')
+        return 0;
+    len = strlen(name);
+    if (len >= sizeof(path))
+        return 0;
+    memcpy(path, name, len + 1);
     if (0 != stat(path, &sbuf)) {
         char *dot = strrchr(path, '.');
         if (!dot)
@@ -133,7 +136,6 @@ static int _xcb_parse_display_path_to_socket(const char *name, char **host, char
 
     return 1;
 }
-#endif
 
 static int _xcb_parse_display(const char *name, char **host, char **protocol,
                       int *displayp, int *screenp)
@@ -146,11 +148,9 @@ static int _xcb_parse_display(const char *name, char **host, char **protocol,
     if(!name)
         return 0;
 
-#ifdef HAVE_LAUNCHD
     /* First check for <path to socket>[.<screen>] */
     if (_xcb_parse_display_path_to_socket(name, host, protocol, displayp, screenp))
         return 1;
-#endif
 
     slash = strrchr(name, '/');
 
@@ -235,6 +235,7 @@ static int _xcb_open(const char *host, char *protocol, const int display)
     size_t filelen;
     char *file = NULL;
     int actual_filelen;
+    struct stat sbuf;
 
     /* If protocol or host is "unix", fall through to Unix socket code below */
     if ((!protocol || (strcmp("unix",protocol) != 0)) &&
@@ -250,7 +251,6 @@ static int _xcb_open(const char *host, char *protocol, const int display)
     /* Check special path for Unix sockets under Solaris Trusted Extensions */
     if (is_system_labeled())
     {
-        struct stat sbuf;
         const char *tsol_base = "/var/tsol/doors/.X11-unix/X";
         char tsol_socket[PATH_MAX];
 
@@ -261,16 +261,12 @@ static int _xcb_open(const char *host, char *protocol, const int display)
     }
 #endif
 
-#ifdef HAVE_LAUNCHD
-    struct stat sbuf;
     if (0 == stat(host, &sbuf)) {
         file = strdup(host);
         if(file == NULL)
             return -1;
         filelen = actual_filelen = strlen(file);
-    } else
-#endif
-    {
+    } else {
         filelen = strlen(base) + 1 + sizeof(display) * 3 + 1;
         file = malloc(filelen);
         if(file == NULL)
