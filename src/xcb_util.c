@@ -95,22 +95,22 @@ static int _xcb_parse_display_path_to_socket(const char *name, char **host, char
     size_t len;
     int _screen = 0;
 
-    if (name[0] != '/')
-        return 0;
     len = strlen(name);
     if (len >= sizeof(path))
         return 0;
     memcpy(path, name, len + 1);
     if (0 != stat(path, &sbuf)) {
-        char *dot = strrchr(path, '.');
-        if (!dot)
+        unsigned long lscreen;
+        char *dot = strrchr(path, '.'), *endptr;
+        if (errno != ENOENT || !dot || dot[1] < '0' || dot[1] > '9')
             return 0;
         *dot = '\0';
-
+        lscreen = strtoul(dot + 1, &endptr, 10);
+        if (lscreen > INT_MAX || !endptr || *endptr)
+            return 0;
         if (0 != stat(path, &sbuf))
             return 0;
-
-        _screen = atoi(dot + 1);
+        _screen = (int)lscreen;
     }
 
     if (host) {
@@ -149,8 +149,11 @@ static int _xcb_parse_display(const char *name, char **host, char **protocol,
         return 0;
 
     /* First check for <path to socket>[.<screen>] */
-    if (_xcb_parse_display_path_to_socket(name, host, protocol, displayp, screenp))
-        return 1;
+    if (name[0] == '/')
+        return _xcb_parse_display_path_to_socket(name, host, protocol, displayp, screenp);
+
+    if (strncmp(name, "unix:", 5) == 0)
+        return _xcb_parse_display_path_to_socket(name + 5, host, protocol, displayp, screenp);
 
     slash = strrchr(name, '/');
 
@@ -235,38 +238,45 @@ static int _xcb_open(const char *host, char *protocol, const int display)
     size_t filelen;
     char *file = NULL;
     int actual_filelen;
-    struct stat sbuf;
 
-    /* If protocol or host is "unix", fall through to Unix socket code below */
-    if ((!protocol || (strcmp("unix",protocol) != 0)) &&
-        (*host != '\0') && (strcmp("unix",host) != 0))
-    {
-        /* display specifies TCP */
-        unsigned short port = X_TCP_PORT + display;
-        return _xcb_open_tcp(host, protocol, port);
-    }
+    if (protocol && strcmp("unix", protocol) == 0 && host && host[0] == '/') {
+        /* Full path to socket provided, ignore everything else */
+        filelen = strlen(host) + 1;
+        if (filelen > INT_MAX)
+            return -1;
+        file = malloc(filelen);
+        if (file == NULL)
+            return -1;
+        memcpy(file, host, filelen);
+        actual_filelen = (int)(filelen - 1);
+    } else {
+        /* If protocol or host is "unix", fall through to Unix socket code below */
+        if ((!protocol || (strcmp("unix",protocol) != 0)) &&
+            (*host != '\0') && (strcmp("unix",host) != 0))
+        {
+            /* display specifies TCP */
+            unsigned short port = X_TCP_PORT + display;
+            return _xcb_open_tcp(host, protocol, port);
+        }
 
 #ifndef _WIN32
 #if defined(HAVE_TSOL_LABEL_H) && defined(HAVE_IS_SYSTEM_LABELED)
-    /* Check special path for Unix sockets under Solaris Trusted Extensions */
-    if (is_system_labeled())
-    {
-        const char *tsol_base = "/var/tsol/doors/.X11-unix/X";
-        char tsol_socket[PATH_MAX];
+        /* Check special path for Unix sockets under Solaris Trusted Extensions */
+        if (is_system_labeled())
+        {
+            const char *tsol_base = "/var/tsol/doors/.X11-unix/X";
+            char tsol_socket[PATH_MAX];
+            struct stat sbuf;
 
-        snprintf(tsol_socket, sizeof(tsol_socket), "%s%d", tsol_base, display);
+            snprintf(tsol_socket, sizeof(tsol_socket), "%s%d", tsol_base, display);
 
-        if (stat(tsol_socket, &sbuf) == 0)
-            base = tsol_base;
-    }
+            if (stat(tsol_socket, &sbuf) == 0)
+                base = tsol_base;
+            else if (errno != ENOENT)
+                return 0;
+        }
 #endif
 
-    if (0 == stat(host, &sbuf)) {
-        file = strdup(host);
-        if(file == NULL)
-            return -1;
-        filelen = actual_filelen = strlen(file);
-    } else {
         filelen = strlen(base) + 1 + sizeof(display) * 3 + 1;
         file = malloc(filelen);
         if(file == NULL)
@@ -274,24 +284,23 @@ static int _xcb_open(const char *host, char *protocol, const int display)
 
         /* display specifies Unix socket */
         actual_filelen = snprintf(file, filelen, "%s%d", base, display);
-    }
 
-    if(actual_filelen < 0)
-    {
-        free(file);
-        return -1;
-    }
-    /* snprintf may truncate the file */
-    filelen = MIN(actual_filelen, filelen - 1);
+        if(actual_filelen < 0)
+        {
+            free(file);
+            return -1;
+        }
+        /* snprintf may truncate the file */
+        filelen = MIN(actual_filelen, filelen - 1);
 #ifdef HAVE_ABSTRACT_SOCKETS
-    fd = _xcb_open_abstract(protocol, file, filelen);
-    if (fd >= 0 || (errno != ENOENT && errno != ECONNREFUSED))
-    {
-        free(file);
-        return fd;
-    }
-
+        fd = _xcb_open_abstract(protocol, file, filelen);
+        if (fd >= 0 || (errno != ENOENT && errno != ECONNREFUSED))
+        {
+            free(file);
+            return fd;
+        }
 #endif
+    }
     fd = _xcb_open_unix(protocol, file);
     free(file);
 
