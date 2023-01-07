@@ -389,7 +389,11 @@ static int _xcb_open_tcp(const char *host, char *protocol, const unsigned short 
         fd = _xcb_socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
         if (_xcb_do_connect(fd, addr->ai_addr, addr->ai_addrlen) >= 0)
             break;
-        close(fd);
+#ifdef _WIN32
+            closesocket(fd);
+#else
+            close(fd);
+#endif
         fd = -1;
     }
     freeaddrinfo(results);
