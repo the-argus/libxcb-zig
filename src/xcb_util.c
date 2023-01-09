@@ -390,9 +390,9 @@ static int _xcb_open_tcp(const char *host, char *protocol, const unsigned short 
         if (_xcb_do_connect(fd, addr->ai_addr, addr->ai_addrlen) >= 0)
             break;
 #ifdef _WIN32
-            closesocket(fd);
+        closesocket(fd);
 #else
-            close(fd);
+        close(fd);
 #endif
         fd = -1;
     }
