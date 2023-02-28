@@ -532,10 +532,8 @@ xcb_connection_t *xcb_connect_to_display_with_auth_info(const char *displayname,
 
     if(auth) {
         c = xcb_connect_to_fd(fd, auth);
-        goto out;
     }
-
-    if(_xcb_get_auth_info(fd, &ourauth, display))
+    else if(_xcb_get_auth_info(fd, &ourauth, display))
     {
         c = xcb_connect_to_fd(fd, &ourauth);
         free(ourauth.name);
