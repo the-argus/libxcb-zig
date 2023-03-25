@@ -93,20 +93,25 @@ static int _xcb_parse_display_path_to_socket(const char *name, char **host, char
     struct stat sbuf;
     char path[PATH_MAX];
     size_t len;
-    int _screen = 0;
+    int _screen = 0, res;
 
     len = strlen(name);
     if (len >= sizeof(path))
         return 0;
     memcpy(path, name, len + 1);
-    if (0 != stat(path, &sbuf)) {
+    res = stat(path, &sbuf);
+    if (0 != res) {
         unsigned long lscreen;
-        char *dot = strrchr(path, '.'), *endptr;
-        if (errno != ENOENT || !dot || dot[1] < '0' || dot[1] > '9')
+	char *dot, *endptr;
+        if (res != -1 || (errno != ENOENT && errno != ENOTDIR))
+            return 0;
+        dot = strrchr(path, '.');
+        if (!dot || dot[1] < '1' || dot[1] > '9')
             return 0;
         *dot = '\0';
+        errno = 0;
         lscreen = strtoul(dot + 1, &endptr, 10);
-        if (lscreen > INT_MAX || !endptr || *endptr)
+        if (lscreen > INT_MAX || !endptr || *endptr || errno)
             return 0;
         if (0 != stat(path, &sbuf))
             return 0;

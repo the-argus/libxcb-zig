@@ -1,6 +1,10 @@
 #include <check.h>
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#ifdef __unix__
+#include <unistd.h>
+#endif
 #include "check_suites.h"
 #include "xcb.h"
 #include "xcbext.h"
@@ -97,6 +101,37 @@ static void parse_display_fail(const char *name)
 
 START_TEST(parse_display_unix)
 {
+#ifdef __unix__
+	char buf[sizeof "/tmp/xcb-test.XXXXXXX"];
+	char buf2[sizeof(buf) + 7];
+	int r, v;
+	memcpy(buf, "/tmp/xcb-test.XXXXXXX", sizeof buf);
+	v = mkstemp(buf);
+	ck_assert_msg(v >= 0, "cannot create temporary file");
+	parse_display_pass(buf, buf, 0, 0);
+	r = snprintf(buf2, sizeof buf2, "unix:%s", buf);
+	if (r < 5 || r >= (int)sizeof buf2) {
+		ck_assert_msg(0, "snprintf() failed (return value %d)", r);
+		unlink(buf);
+		return;
+	}
+	parse_display_pass(buf2, buf, 0, 0);
+	r = snprintf(buf2, sizeof buf2, "unix:%s.1", buf);
+	if (r < 7 || r >= (int)sizeof buf2) {
+		ck_assert_msg(0, "snprintf() failed (return value %d)", r);
+		unlink(buf);
+		return;
+	}
+	parse_display_pass(buf2, buf, 0, 1);
+	r = snprintf(buf2, sizeof buf2, "%s.1", buf);
+	if (r < 2 || r >= (int)sizeof buf2) {
+		ck_assert_msg(0, "snprintf() failed (return value %d)", r);
+		unlink(buf);
+		return;
+	}
+	parse_display_pass(buf2, buf, 0, 1);
+	unlink(buf);
+#endif
 	parse_display_pass(":0", "", 0, 0);
 	parse_display_pass(":1", "", 1, 0);
 	parse_display_pass(":0.1", "", 0, 1);
