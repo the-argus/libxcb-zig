@@ -2340,7 +2340,7 @@ def _c_request_helper(self, name, void, regular, aux=False, reply_fds=False):
         for field in param_fields:
             if not field.type.fixed_size() and field.wire:
                 count = count + 2
-                if field.type.c_need_serialize:
+                if field.type.c_need_serialize or field.type.c_need_sizeof:
                     # _serialize() keeps track of padding automatically
                     count -= 1
     dimension = count + 2
