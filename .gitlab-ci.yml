@@ -4,7 +4,7 @@
 # Please see the ci-templates documentation for details:
 # https://freedesktop.pages.freedesktop.org/ci-templates/
 
-.templates_sha: &template_sha 34f4ade99434043f88e164933f570301fd18b125 # see https://docs.gitlab.com/ee/ci/yaml/#includefile
+.templates_sha: &template_sha b791bd48996e3ced9ca13f1c5ee82be8540b8adb # see https://docs.gitlab.com/ee/ci/yaml/#includefile
 
 
 include:
@@ -20,6 +20,7 @@ include:
 
 stages:
   - prep             # prep work like rebuilding the container images if there is a change
+  - install xcbproto
   - build            # for actually building and testing things in a container
   - test
   - deploy
@@ -30,8 +31,8 @@ variables:
   # The tag should be updated each time the list of packages is updated.
   # Changing a tag forces the associated image to be rebuilt.
   # Note: the tag has no meaning, we use a date format purely for readability
-  FDO_DISTRIBUTION_TAG:  '2023-08-20.0'
-  FDO_DISTRIBUTION_PACKAGES:  'git gcc pkgconf autoconf automake libtool make xorg-util-macros python doxygen graphviz check libxslt xcb-proto libxau libxdmcp'
+  FDO_DISTRIBUTION_TAG:  '2023-08-21.0'
+  FDO_DISTRIBUTION_PACKAGES:  'git gcc pkgconf autoconf automake libtool make xorg-util-macros python doxygen graphviz check libxslt libxau libxdmcp'
 
 
 #
@@ -79,6 +80,28 @@ container-prep:
   variables:
     GIT_STRATEGY: none
 
+#
+# Build latest xcbproto from git, instead of relying on the container
+# to package a new enough version.
+#
+xcbproto-build:
+  extends:
+    - .fdo.distribution-image@arch
+  stage: install xcbproto
+  script:
+    - export INSTDIR="$PWD/_inst"
+    - git clone --depth=1 https://gitlab.freedesktop.org/xorg/proto/xcbproto
+    - pushd xcbproto > /dev/null
+    - mkdir _builddir
+    - pushd _builddir > /dev/null
+    - ../autogen.sh --disable-silent-rules --prefix="$INSTDIR"
+    - make -j${FDO_CI_CONCURRENT:-4} install
+    - popd > /dev/null
+    - popd > /dev/null
+  variables:
+  artifacts:
+    paths:
+      - _inst
 
 #
 # The default build, runs on the image built above.
@@ -88,6 +111,8 @@ build:
   extends:
     - .fdo.distribution-image@arch
   script:
+    - export INSTDIR="$PWD/_inst"
+    - export PKG_CONFIG_PATH=$(find $INSTDIR/ -name '*.pc' -printf "%h:")
     - autoreconf -ivf
     - mkdir _builddir
     - pushd _builddir > /dev/null
