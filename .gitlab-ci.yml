@@ -30,7 +30,7 @@ variables:
   # The tag should be updated each time the list of packages is updated.
   # Changing a tag forces the associated image to be rebuilt.
   # Note: the tag has no meaning, we use a date format purely for readability
-  FDO_DISTRIBUTION_TAG:  '2022-07-18.0'
+  FDO_DISTRIBUTION_TAG:  '2023-08-20.0'
   FDO_DISTRIBUTION_PACKAGES:  'git gcc pkgconf autoconf automake libtool make xorg-util-macros python doxygen graphviz check libxslt xcb-proto libxau libxdmcp'
 
 
