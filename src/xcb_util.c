@@ -244,6 +244,7 @@ static int _xcb_open(const char *host, char *protocol, const int display)
     char *file = NULL;
     int actual_filelen;
 
+#ifndef _WIN32
     if (protocol && strcmp("unix", protocol) == 0 && host && host[0] == '/') {
         /* Full path to socket provided, ignore everything else */
         filelen = strlen(host) + 1;
@@ -255,6 +256,7 @@ static int _xcb_open(const char *host, char *protocol, const int display)
         memcpy(file, host, filelen);
         actual_filelen = (int)(filelen - 1);
     } else {
+#endif
         /* If protocol or host is "unix", fall through to Unix socket code below */
         if ((!protocol || (strcmp("unix",protocol) != 0)) &&
             (*host != '\0') && (strcmp("unix",host) != 0))
