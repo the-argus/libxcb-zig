@@ -49,8 +49,6 @@ pub fn build(b: *std.Build) void {
 /// Goes to the xml directory and creates C source files from each XML file
 /// returns a slice of the generated C files
 fn makeCSourceFromXproto(b: *std.Build, xml_files_dir: []const u8) ![]const []const u8 {
-    // const output_dir = try b.cache_root.join(b.allocator, &.{"gen"});
-    // _ = output_dir;
 
     // basically do the ls command
     var xml_files_abs_paths = block: {
@@ -78,13 +76,49 @@ fn makeCSourceFromXproto(b: *std.Build, xml_files_dir: []const u8) ![]const []co
         break :block try xml_file_names.toOwnedSlice();
     };
 
-    const generator_script = "src/c_client.py";
+    // before generating files, create the output directory and change our CWD to it
+    const output_dir = try b.cache_root.join(b.allocator, &.{"gen"});
+    std.fs.makeDirAbsolute(output_dir) catch |err| block: {
+        // TODO: maybe delete the old output and recreate it every time?
+        switch (err) {
+            std.os.MakeDirError.PathAlreadyExists => break :block,
+            else => return err,
+        }
+    };
+
+    // grab original directory and return to it when the scope ends
+    const original_dir = try std.process.getCwdAlloc(b.allocator);
+    defer b.allocator.free(original_dir);
+    var output_dir_handle = try std.fs.openDirAbsolute(output_dir, .{});
+    defer {
+        output_dir_handle.close();
+        var o = std.fs.openDirAbsolute(original_dir, .{}) catch @panic("failed to open original working directory");
+        o.setAsCwd() catch @panic("error setting working directory back to original");
+        o.close();
+    }
+
+    const generator_script = try std.fs.path.join(b.allocator, &.{ original_dir, "src", "c_client.py" });
+
+    // switch into the output dir
+    output_dir_handle.setAsCwd() catch @panic("error setting path to CWD");
 
     // run the generator script on all the xml files
     for (xml_files_abs_paths) |xml_file| {
         const r = std.ChildProcess.exec(.{
             .allocator = b.allocator,
-            .argv = &.{ "python", generator_script, xml_file },
+            .argv = &.{
+                "python",
+                generator_script,
+                "-p",
+                output_dir,
+                "-c",
+                "dumm_CENTER",
+                "-l",
+                "dummy_LEFTFOOTER",
+                "-s",
+                std.fs.path.stem(xml_file),
+                xml_file,
+            },
         }) catch @panic("failed to exec child process");
         std.log.debug("try to convert {s} to .c file", .{xml_file});
         std.log.debug("conversion stdout: {s}", .{r.stdout});
@@ -99,7 +133,7 @@ fn makeCSourceFromXproto(b: *std.Build, xml_files_dir: []const u8) ![]const []co
     defer generated_files.deinit();
 
     for (xml_files_abs_paths) |xml_file| {
-        const c_file = try std.fmt.allocPrint(b.allocator, "{s}.c", .{removeExtension(xml_file)});
+        const c_file = try std.fmt.allocPrint(b.allocator, "{s}/{s}.c", .{ output_dir, std.fs.path.stem(xml_file) });
         try generated_files.append(c_file);
     }
 
