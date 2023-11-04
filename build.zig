@@ -1,5 +1,14 @@
 const std = @import("std");
 
+var xcb_proto_include_dir: ?[]const u8 = null;
+
+pub fn regenerateHeaders(b: *std.Build) void {
+    if (xcb_proto_include_dir == null) {
+        @panic("calling regenerateHeaders before build() was called. unexpected");
+    }
+    makeCSourceFromXproto(b, xcb_proto_include_dir.?) catch @panic("OOM");
+}
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -27,7 +36,8 @@ pub fn build(b: *std.Build) void {
             b.allocator.free(r.stdout);
         }
         const index = std.mem.indexOfScalar(u8, r.stdout, '\n') orelse r.stdout.len - 1;
-        break :block makeCSourceFromXproto(b, r.stdout[0..index]) catch @panic("OOM");
+        xcb_proto_include_dir = r.stdout[0..index];
+        break :block makeCSourceFromXproto(b, xcb_proto_include_dir.?) catch @panic("OOM");
     };
 
     const lib = b.addStaticLibrary(.{
