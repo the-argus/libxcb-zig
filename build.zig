@@ -6,7 +6,8 @@ pub fn regenerateHeaders(b: *std.Build) void {
     if (xcb_proto_include_dir == null) {
         @panic("calling regenerateHeaders before build() was called. unexpected");
     }
-    makeCSourceFromXproto(b, xcb_proto_include_dir.?) catch @panic("OOM");
+    const ignore = makeCSourceFromXproto(b, xcb_proto_include_dir.?) catch @panic("OOM");
+    _ = ignore;
 }
 
 pub fn build(b: *std.Build) void {
