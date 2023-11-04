@@ -6,6 +6,7 @@ pub fn build(b: *std.Build) void {
 
     const xcb_queue_buffer_size = b.option(u64, "xcb_queue_buffer_size", "i dont know what this is. someone who knows xorg please document") orelse 16384;
     const iov_max = b.option(u64, "iov_max", "i dont know what this is. someone who knows xorg please document") orelse 16;
+    const xorgproto_header_dir = b.option([]const u8, "xproto_header_dir", "header directory to use for libX11") orelse "";
 
     var flags = std.ArrayList([]const u8).init(b.allocator);
     defer flags.deinit();
@@ -29,13 +30,13 @@ pub fn build(b: *std.Build) void {
         break :block makeCSourceFromXproto(b, r.stdout[0..index]) catch @panic("OOM");
     };
 
-    const exe = b.addStaticLibrary(.{
+    const lib = b.addStaticLibrary(.{
         .name = "xcb",
         .target = target,
         .optimize = optimize,
     });
 
-    exe.addCSourceFiles(&.{
+    lib.addCSourceFiles(&.{
         "src/xcb_auth.c",
         "src/xcb_conn.c",
         "src/xcb_ext.c",
@@ -46,18 +47,25 @@ pub fn build(b: *std.Build) void {
         "src/xcb_xid.c",
     }, b.allocator.dupe([]const u8, flags.items) catch @panic("OOM"));
 
-    exe.addIncludePath(.{ .path = "src" });
+    lib.addIncludePath(.{ .path = "src" });
+    lib.addIncludePath(.{ .path = xorgproto_header_dir });
+
+    lib.linkLibrary(b.dependency("xau", .{
+        .target = target,
+        .optimize = optimize,
+        .xproto_header_dir = xorgproto_header_dir,
+    }).artifact("Xau"));
 
     if (generated_c_sources.len > 0) {
         const dirname = std.fs.path.dirname(generated_c_sources[0]) orelse @panic("c source file path not absolute?");
-        exe.addIncludePath(.{ .path = dirname });
+        lib.addIncludePath(.{ .path = dirname });
     }
 
-    exe.addCSourceFiles(generated_c_sources, b.allocator.dupe([]const u8, flags.items) catch @panic("OOM"));
+    lib.addCSourceFiles(generated_c_sources, b.allocator.dupe([]const u8, flags.items) catch @panic("OOM"));
 
-    exe.linkLibC();
+    lib.linkLibC();
 
-    b.installArtifact(exe);
+    b.installArtifact(lib);
 }
 
 /// Goes to the xml directory and creates C source files from each XML file

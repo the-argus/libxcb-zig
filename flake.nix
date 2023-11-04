@@ -19,8 +19,11 @@
           python3Minimal
           xorg.xcbproto
           pkg-config
-          gdb
         ];
+
+        shellHook = ''
+          export XPROTO_INCLUDE_DIR=${pkgs.xorg.xorgproto}/include
+        '';
       };
   };
 }

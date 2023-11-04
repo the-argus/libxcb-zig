@@ -1,0 +1,11 @@
+.{
+    .name = "libxcb",
+    .version = "0.0.1",
+
+    .dependencies = .{
+        .xau = .{
+            .url = "https://github.com/the-argus/libxau/archive/e02bc67bb8d6d7b29d92d304a8ff629cd886230f.tar.gz",
+            .hash = "12207096a73677604d7d7e6af1a1fbfa78b84d4b59eeca6dc30b59a50fad90ae8bcb",
+        },
+    }
+}
