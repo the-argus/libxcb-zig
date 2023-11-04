@@ -4,6 +4,17 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const xcb_queue_buffer_size = b.option(u64, "xcb_queue_buffer_size", "i dont know what this is. someone who knows xorg please document") orelse 16384;
+    const iov_max = b.option(u64, "iov_max", "i dont know what this is. someone who knows xorg please document") orelse 16;
+
+    var flags = std.ArrayList([]const u8).init(b.allocator);
+    defer flags.deinit();
+
+    const xcb_queue_buffer_size_flag = std.fmt.allocPrint(b.allocator, "-DXCB_QUEUE_BUFFER_SIZE={any}", .{xcb_queue_buffer_size}) catch @panic("OOM");
+    flags.append(xcb_queue_buffer_size_flag) catch @panic("OOM");
+    const iov_max_flage = std.fmt.allocPrint(b.allocator, "-DIOV_MAX={any}", .{iov_max}) catch @panic("OOM");
+    flags.append(iov_max_flage) catch @panic("OOM");
+
     // get the location of the xproto xml files for C source file generation
     const generated_c_sources = block: {
         const r = std.ChildProcess.exec(.{
@@ -33,7 +44,7 @@ pub fn build(b: *std.Build) void {
         "src/xcb_out.c",
         "src/xcb_util.c",
         "src/xcb_xid.c",
-    }, &.{});
+    }, b.allocator.dupe([]const u8, flags.items) catch @panic("OOM"));
 
     exe.addIncludePath(.{ .path = "src" });
 
@@ -42,7 +53,7 @@ pub fn build(b: *std.Build) void {
         exe.addIncludePath(.{ .path = dirname });
     }
 
-    exe.addCSourceFiles(generated_c_sources, &.{});
+    exe.addCSourceFiles(generated_c_sources, b.allocator.dupe([]const u8, flags.items) catch @panic("OOM"));
 
     exe.linkLibC();
 
