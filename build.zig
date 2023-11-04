@@ -18,10 +18,6 @@ pub fn build(b: *std.Build) void {
         break :block makeCSourceFromXproto(b, r.stdout[0..index]) catch @panic("OOM");
     };
 
-    for (generated_c_sources) |generated| {
-        std.log.info("{s}", .{generated});
-    }
-
     const exe = b.addStaticLibrary(.{
         .name = "xcb",
         .target = target,
@@ -40,6 +36,13 @@ pub fn build(b: *std.Build) void {
     }, &.{});
 
     exe.addIncludePath(.{ .path = "src" });
+
+    if (generated_c_sources.len > 0) {
+        const dirname = std.fs.path.dirname(generated_c_sources[0]) orelse @panic("c source file path not absolute?");
+        exe.addIncludePath(.{ .path = dirname });
+    }
+
+    exe.addCSourceFiles(generated_c_sources, &.{});
 
     exe.linkLibC();
 
@@ -70,8 +73,9 @@ fn makeCSourceFromXproto(b: *std.Build, xml_files_dir: []const u8) ![]const []co
                 std.log.warn("found non-file in xml files directory of type {any}: {s}", .{ entry.kind, entry.path });
                 continue;
             }
-            try xml_file_names.append(try std.fs.path.join(b.allocator, &.{ xml_files_dir, entry.path }));
-            // try xml_file_names.append(entry.path);
+            if (std.mem.eql(u8, std.fs.path.extension(entry.path), ".xml")) {
+                try xml_file_names.append(try std.fs.path.join(b.allocator, &.{ xml_files_dir, entry.path }));
+            }
         }
         break :block try xml_file_names.toOwnedSlice();
     };
@@ -112,7 +116,7 @@ fn makeCSourceFromXproto(b: *std.Build, xml_files_dir: []const u8) ![]const []co
                 "-p",
                 output_dir,
                 "-c",
-                "dumm_CENTER",
+                "dummy_CENTER",
                 "-l",
                 "dummy_LEFTFOOTER",
                 "-s",
@@ -120,9 +124,9 @@ fn makeCSourceFromXproto(b: *std.Build, xml_files_dir: []const u8) ![]const []co
                 xml_file,
             },
         }) catch @panic("failed to exec child process");
-        std.log.debug("try to convert {s} to .c file", .{xml_file});
-        std.log.debug("conversion stdout: {s}", .{r.stdout});
-        std.log.debug("conversion sterr: {s}", .{r.stderr});
+        // std.log.debug("try to convert {s} to .c file", .{xml_file});
+        // std.log.debug("conversion stdout: {s}", .{r.stdout});
+        // std.log.debug("conversion sterr: {s}", .{r.stderr});
         defer {
             b.allocator.free(r.stderr);
             b.allocator.free(r.stdout);
@@ -138,10 +142,4 @@ fn makeCSourceFromXproto(b: *std.Build, xml_files_dir: []const u8) ![]const []co
     }
 
     return generated_files.toOwnedSlice();
-}
-
-fn removeExtension(path: []const u8) []const u8 {
-    const index = std.mem.lastIndexOfScalar(u8, path, '.') orelse return path[0..];
-    if (index == 0) return path;
-    return path[0..index];
 }
