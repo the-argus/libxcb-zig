@@ -100,7 +100,7 @@ fn makeCSourceFromXproto(b: *std.Build, xml_files_dir: []const u8) ![]const []co
     };
 
     // before generating files, create the output directory and change our CWD to it
-    const output_dir = try b.cache_root.join(b.allocator, &.{"gen"});
+    const output_dir = try b.global_cache_root.join(b.allocator, &.{"libxcb_gen"});
     std.fs.makeDirAbsolute(output_dir) catch |err| block: {
         // TODO: maybe delete the old output and recreate it every time?
         switch (err) {
@@ -124,6 +124,7 @@ fn makeCSourceFromXproto(b: *std.Build, xml_files_dir: []const u8) ![]const []co
 
     // switch into the output dir
     output_dir_handle.setAsCwd() catch @panic("error setting path to CWD");
+    std.log.info("generating xcb headers into {s}", .{output_dir});
 
     // run the generator script on all the xml files
     for (xml_files_abs_paths) |xml_file| {
