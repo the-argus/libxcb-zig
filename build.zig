@@ -17,7 +17,9 @@ pub fn build(b: *std.Build) !void {
     flags.append(iov_max_flage) catch @panic("OOM");
 
     // get the location of the xproto xml files for C source file generation
-    const generated_c_sources = getGeneratedFiles(b, getXcbIncludeDir(b.allocator)) catch @panic("OOM");
+    const generated = getGeneratedFiles(b, getXcbIncludeDir(b.allocator)) catch @panic("OOM");
+    const generated_c_sources = generated.c_files;
+    const generated_headers = generated.header_files;
 
     const lib = b.addStaticLibrary(.{
         .name = "xcb",
@@ -43,6 +45,11 @@ pub fn build(b: *std.Build) !void {
     lib.installHeader("src/xcbext.h", "xcb/xcbext.h");
     lib.installHeader("src/xcbint.h", "xcb/xcbint.h");
     lib.installHeader("src/xcb_windefs.h", "xcb/xcb_windefs.h");
+
+    // install all the generated header files directly in include/
+    for (generated_headers) |header_path| {
+        lib.installHeader(header_path, std.fs.path.basename(header_path));
+    }
 
     {
         const xml_files_abs_paths = getAbsolutePathsToXMLFiles(b.allocator, getXcbIncludeDir(b.allocator)) catch |err| {
@@ -75,11 +82,13 @@ pub fn build(b: *std.Build) !void {
     lib.addIncludePath(.{ .path = "src" });
     lib.addIncludePath(.{ .path = xorgproto_header_dir });
 
-    lib.linkLibrary(b.dependency("xau", .{
+    const xau = b.dependency("xau", .{
         .target = target,
         .optimize = optimize,
         .xproto_header_dir = xorgproto_header_dir,
-    }).artifact("Xau"));
+    }).artifact("Xau");
+    lib.linkLibrary(xau);
+    lib.installLibraryHeaders(xau);
 
     if (generated_c_sources.len > 0) {
         const dirname = std.fs.path.dirname(generated_c_sources[0]) orelse @panic("c source file path not absolute?");
@@ -93,23 +102,35 @@ pub fn build(b: *std.Build) !void {
     b.installArtifact(lib);
 }
 
+const GeneratedFiles = struct {
+    header_files: []const []const u8,
+    c_files: []const []const u8,
+};
+
 /// Figures out what the files that result from the xml files will be. these files
 /// are not generated yet!
-fn getGeneratedFiles(b: *std.Build, xml_files_dir: []const u8) ![]const []const u8 {
+fn getGeneratedFiles(b: *std.Build, xml_files_dir: []const u8) !GeneratedFiles {
     const xml_files_abs_paths = try getAbsolutePathsToXMLFiles(b.allocator, xml_files_dir);
 
     // before generating files, create the output directory and change our CWD to it
     const output_dir = try getOutputDirectory(b);
 
-    var generated_files = std.ArrayList([]const u8).init(b.allocator);
-    defer generated_files.deinit();
+    var c_files = std.ArrayList([]const u8).init(b.allocator);
+    defer c_files.deinit();
+    var header_files = std.ArrayList([]const u8).init(b.allocator);
+    defer header_files.deinit();
 
     for (xml_files_abs_paths) |xml_file| {
         const c_file = try std.fmt.allocPrint(b.allocator, "{s}/{s}.c", .{ output_dir, std.fs.path.stem(xml_file) });
-        try generated_files.append(c_file);
+        const header_file = try std.fmt.allocPrint(b.allocator, "{s}/{s}.h", .{ output_dir, std.fs.path.stem(xml_file) });
+        try c_files.append(c_file);
+        try header_files.append(header_file);
     }
 
-    return generated_files.toOwnedSlice();
+    return .{
+        .c_files = try c_files.toOwnedSlice(),
+        .header_files = try header_files.toOwnedSlice(),
+    };
 }
 
 fn getOutputDirectory(b: *std.Build) ![]const u8 {
