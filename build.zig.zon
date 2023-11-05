@@ -4,8 +4,8 @@
 
     .dependencies = .{
         .xau = .{
-            .url = "https://github.com/the-argus/libxau/archive/e02bc67bb8d6d7b29d92d304a8ff629cd886230f.tar.gz",
-            .hash = "12207096a73677604d7d7e6af1a1fbfa78b84d4b59eeca6dc30b59a50fad90ae8bcb",
+            .url = "https://github.com/the-argus/libxau/archive/e8c9d6eb98cd4e1d2966ecac097542ddfc1a0002.tar.gz",
+            .hash = "1220bc245e659be83d5025e0744b35233936835071a3391ce8d19dc513cf623b581e",
         },
     }
 }
