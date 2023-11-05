@@ -28,18 +28,9 @@ pub fn build(b: *std.Build) !void {
     });
 
     // TODO: make an issue on zig issue tracker about this? i should not have to do this
-    std.fs.makeDirAbsolute(b.install_prefix) catch |err| block: {
-        if (err == std.os.MakeDirError.PathAlreadyExists) break :block;
-        return err;
-    };
-    std.fs.makeDirAbsolute(std.fs.path.join(b.allocator, &.{ b.install_prefix, "include" }) catch @panic("OOM")) catch |err| block: {
-        if (err == std.os.MakeDirError.PathAlreadyExists) break :block;
-        return err;
-    };
-    std.fs.makeDirAbsolute(std.fs.path.join(b.allocator, &.{ b.install_prefix, "include", "xcb" }) catch @panic("OOM")) catch |err| block: {
-        if (err == std.os.MakeDirError.PathAlreadyExists) break :block;
-        return err;
-    };
+    std.fs.makeDirAbsolute(b.install_prefix) catch {};
+    std.fs.makeDirAbsolute(std.fs.path.join(b.allocator, &.{ b.install_prefix, "include" }) catch @panic("OOM")) catch {};
+    std.fs.makeDirAbsolute(std.fs.path.join(b.allocator, &.{ b.install_prefix, "include", "xcb" }) catch @panic("OOM")) catch {};
 
     lib.installHeader("src/xcb.h", "xcb/xcb.h");
     lib.installHeader("src/xcbext.h", "xcb/xcbext.h");
