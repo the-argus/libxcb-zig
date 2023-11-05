@@ -37,6 +37,12 @@ pub fn build(b: *std.Build) !void {
     lib.installHeader("src/xcbint.h", "xcb/xcbint.h");
     lib.installHeader("src/xcb_windefs.h", "xcb/xcb_windefs.h");
 
+    // generated headers dont use the xcb/ prefix for these
+    lib.installHeader("src/xcb.h", "xcb.h");
+    lib.installHeader("src/xcbext.h", "xcbext.h");
+    lib.installHeader("src/xcbint.h", "xcbint.h");
+    lib.installHeader("src/xcb_windefs.h", "xcb_windefs.h");
+
     // install all the generated header files directly in include/
     for (generated_headers) |header_path| {
         lib.installHeader(header_path, std.fs.path.basename(header_path));
