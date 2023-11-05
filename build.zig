@@ -22,6 +22,16 @@ pub fn build(b: *std.Build) !void {
         break :block null;
     };
 
+    const xau_dep = if (xproto_header_dir) |dir| b.dependency("xau", .{
+        .target = target,
+        .optimize = optimize,
+        .xproto_header_dir = dir,
+    }) else b.dependency("xau", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const xau = xau_dep.artifact("Xau");
+
     var flags = std.ArrayList([]const u8).init(b.allocator);
     defer flags.deinit();
 
@@ -110,17 +120,9 @@ pub fn build(b: *std.Build) !void {
     }, b.allocator.dupe([]const u8, flags.items) catch @panic("OOM"));
 
     lib.addIncludePath(.{ .path = "src" });
-    if (xproto_header_dir) |dir| lib.addIncludePath(.{ .path = dir });
+    // TODO: evil hardcoding. just put libxau and libxcb in the same repo?
+    lib.addIncludePath(.{ .path = xproto_header_dir orelse xau_dep.builder.build_root.join(b.allocator, &.{"xproto_header_fallback"}) catch @panic("OOM") });
 
-    const xau_dep = if (xproto_header_dir) |dir| b.dependency("xau", .{
-        .target = target,
-        .optimize = optimize,
-        .xproto_header_dir = dir,
-    }) else b.dependency("xau", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    const xau = xau_dep.artifact("Xau");
     lib.linkLibrary(xau);
     lib.installLibraryHeaders(xau);
 
