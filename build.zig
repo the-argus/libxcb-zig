@@ -7,7 +7,8 @@ pub fn build(b: *std.Build) !void {
     const xcb_queue_buffer_size = b.option(u64, "xcb_queue_buffer_size", "i dont know what this is. someone who knows xorg please document") orelse 16384;
     const iov_max = b.option(u64, "iov_max", "i dont know what this is. someone who knows xorg please document") orelse 16;
     const use_pkg_config_for_xproto = b.option(bool, "use_pkg_config_to_find_xproto_spec", "Whether to invoke pkg-config to find the location of xproto XML files") orelse false;
-    const xorgproto_header_dir = b.option([]const u8, "xproto_header_dir", "header directory to use for libX11") orelse "";
+    // TODO: support passing settings such as this to libxau. currently this specific setting can be passed by setting the XPROTO_INCLUDE_DIR environment variable
+    // const xproto_header_dir = b.option([]const u8, "xproto_header_dir", "header directory to use for libX11");
 
     var flags = std.ArrayList([]const u8).init(b.allocator);
     defer flags.deinit();
@@ -79,13 +80,13 @@ pub fn build(b: *std.Build) !void {
     }, b.allocator.dupe([]const u8, flags.items) catch @panic("OOM"));
 
     lib.addIncludePath(.{ .path = "src" });
-    lib.addIncludePath(.{ .path = xorgproto_header_dir });
+    // if (xproto_header_dir) |dir| lib.addIncludePath(.{ .path = dir });
 
-    const xau = b.dependency("xau", .{
+    const xau_dep = b.dependency("xau", .{
         .target = target,
         .optimize = optimize,
-        .xproto_header_dir = xorgproto_header_dir,
-    }).artifact("Xau");
+    });
+    const xau = xau_dep.artifact("Xau");
     lib.linkLibrary(xau);
     lib.installLibraryHeaders(xau);
 
