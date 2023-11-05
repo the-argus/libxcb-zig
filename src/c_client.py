@@ -331,7 +331,7 @@ def c_close(self):
     _h(' */')
 
     # Write header file
-    hfile = open('%s.h' % _ns.header, 'w')
+    hfile = open('%s/%s.h' % (output_path, _ns.header), 'w')
     for list in _hlines:
         for line in list:
             hfile.write(line)
@@ -339,7 +339,7 @@ def c_close(self):
     hfile.close()
 
     # Write source file
-    cfile = open('%s.c' % _ns.header, 'w')
+    cfile = open('%s/%s.c' % (output_path, _ns.header), 'w')
     for list in _clines:
         for line in list:
             cfile.write(line)
@@ -2661,13 +2661,13 @@ def _man_request(self, name, void, aux):
         if manpaths:
             sys.stdout.write(name)
         f = open(name, 'w')
-        f.write('.so man%s/%s.%s' % (section, func_name, section))
+        f.write('.so %s/man%s/%s.%s' % (output_path, section, func_name, section))
         f.close()
 
     if manpaths:
-        sys.stdout.write('man/%s.%s ' % (func_name, section))
+        sys.stdout.write('%s/man/%s.%s ' % (output_path, func_name, section))
     # Our CWD is src/, so this will end up in src/man/
-    f = open('man/%s.%s' % (func_name, section), 'w')
+    f = open('%s/man/%s.%s' % (output_path, func_name, section), 'w')
     f.write('.TH %s %s  "%s" "%s" "XCB Requests"\n' % (func_name, section, center_footer, left_footer))
     # Left-adjust instead of adjusting to both sides
     f.write('.ad l\n')
@@ -3033,9 +3033,9 @@ def _man_request(self, name, void, aux):
 
 def _man_event(self, name):
     if manpaths:
-        sys.stdout.write('man/%s.%s ' % (self.c_type, section))
+        sys.stdout.write('%s/man/%s.%s ' % (output_path, self.c_type, section))
     # Our CWD is src/, so this will end up in src/man/
-    f = open('man/%s.%s' % (self.c_type, section), 'w')
+    f = open('%s/man/%s.%s' % (output_path, self.c_type, section), 'w')
     f.write('.TH %s %s  "%s" "%s" "XCB Events"\n' % (self.c_type, section, center_footer, left_footer))
     # Left-adjust instead of adjusting to both sides
     f.write('.ad l\n')
@@ -3339,10 +3339,10 @@ output = {'open'    : c_open,
 
 # Check for the argument that specifies path to the xcbgen python package.
 try:
-    opts, args = getopt.getopt(sys.argv[1:], 'c:l:s:p:m', ["server-side"])
+    opts, args = getopt.getopt(sys.argv[1:], 'c:l:s:e:p:m', ["server-side"])
 except getopt.GetoptError as err:
     print(err)
-    print('Usage: c_client.py -c center_footer -l left_footer -s section [-p path] file.xml')
+    print('Usage: c_client.py -c center_footer -l left_footer -s section [-p path] -o output_dir file.xml')
     sys.exit(1)
 
 for (opt, arg) in opts:
@@ -3354,6 +3354,8 @@ for (opt, arg) in opts:
         section=arg
     if opt == '-p':
         sys.path.insert(1, arg)
+    if opt == '-e':
+        output_path = arg
     if opt == '--server-side':
         config_server_side=True
     elif opt == '-m':

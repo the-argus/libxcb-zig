@@ -74,11 +74,6 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(lib);
 }
 
-fn fileGenerationMakeFn(step: *std.Build.Step, prog_node: *std.Progress.Node) anyerror!void {
-    _ = step;
-    _ = prog_node;
-}
-
 /// Figures out what the files that result from the xml files will be. these files
 /// are not generated yet!
 fn getGeneratedFiles(b: *std.Build, xml_files_dir: []const u8) ![]const []const u8 {
@@ -117,6 +112,15 @@ fn addSystemCommandsForGeneratingSourceFiles(
         }
     };
 
+    // also make the man subdir
+    std.fs.makeDirAbsolute(try std.fs.path.join(ally, &.{ output_dir, "man" })) catch |err| block: {
+        // TODO: maybe delete the old output and recreate it every time?
+        switch (err) {
+            std.os.MakeDirError.PathAlreadyExists => break :block,
+            else => return err,
+        }
+    };
+
     const generator_script = b.build_root.join(ally, &.{ "src", "c_client.py" }) catch @panic("OOM");
 
     // run the generator script on all the xml files
@@ -124,6 +128,8 @@ fn addSystemCommandsForGeneratingSourceFiles(
         const cmd = b.addSystemCommand(&.{
             "python",
             generator_script,
+            "-e",
+            output_dir,
             "-p",
             output_dir,
             "-c",
