@@ -25,13 +25,22 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    var generate_c_sources_step = b.allocator.create(std.Build.Step) catch @panic("Allocation failure, probably OOM");
-    generate_c_sources_step.* = std.Build.Step.init(.{
-        .id = .custom,
-        .name = "c_source_generation_step",
-        .makeFn = fileGenerationMakeFn,
-        .owner = b,
-    });
+    {
+        const xml_files_abs_paths = getAbsolutePathsToXMLFiles(b.allocator, getXcbIncludeDir(b.allocator)) catch |err| {
+            std.log.err("failed with {any}", .{err});
+            @panic("failed to generate absolute paths to xml files");
+        };
+        addSystemCommandsForGeneratingSourceFiles(
+            b,
+            &lib.step,
+            b.allocator,
+            getOutputDirectory(b) catch @panic("OOM"),
+            xml_files_abs_paths,
+        ) catch |err| {
+            std.log.err("failed with {any}", .{err});
+            @panic("failed while generating source files");
+        };
+    }
 
     lib.addCSourceFiles(&.{
         "src/xcb_auth.c",
@@ -66,9 +75,8 @@ pub fn build(b: *std.Build) void {
 }
 
 fn fileGenerationMakeFn(step: *std.Build.Step, prog_node: *std.Progress.Node) anyerror!void {
+    _ = step;
     _ = prog_node;
-    const xml_files_abs_paths = try getAbsolutePathsToXMLFiles(step.owner.allocator, getXcbIncludeDir(step.*.owner.allocator));
-    try generateSourceFiles(step.owner.allocator, try getOutputDirectory(step.*.owner), xml_files_abs_paths);
 }
 
 /// Figures out what the files that result from the xml files will be. these files
@@ -94,18 +102,13 @@ fn getOutputDirectory(b: *std.Build) ![]const u8 {
     return try b.global_cache_root.join(b.allocator, &.{"libxcb_gen"});
 }
 
-fn generateSourceFiles(ally: std.mem.Allocator, output_dir: []const u8, xml_files_abs_paths: []const []const u8) !void {
-    // grab original directory and return to it when the scope ends
-    const original_dir = try std.process.getCwdAlloc(ally);
-    defer ally.free(original_dir);
-    var output_dir_handle = try std.fs.openDirAbsolute(output_dir, .{});
-    defer {
-        output_dir_handle.close();
-        var o = std.fs.openDirAbsolute(original_dir, .{}) catch @panic("failed to open original working directory");
-        o.setAsCwd() catch @panic("error setting working directory back to original");
-        o.close();
-    }
-
+fn addSystemCommandsForGeneratingSourceFiles(
+    b: *std.Build,
+    step: *std.Build.Step,
+    ally: std.mem.Allocator,
+    output_dir: []const u8,
+    xml_files_abs_paths: []const []const u8,
+) !void {
     std.fs.makeDirAbsolute(output_dir) catch |err| block: {
         // TODO: maybe delete the old output and recreate it every time?
         switch (err) {
@@ -114,36 +117,24 @@ fn generateSourceFiles(ally: std.mem.Allocator, output_dir: []const u8, xml_file
         }
     };
 
-    // switch into the output dir
-    output_dir_handle.setAsCwd() catch @panic("error setting path to CWD");
-
-    const generator_script = try std.fs.path.join(ally, &.{ "src", "c_client.py" });
+    const generator_script = b.build_root.join(ally, &.{ "src", "c_client.py" }) catch @panic("OOM");
 
     // run the generator script on all the xml files
     for (xml_files_abs_paths) |xml_file| {
-        const r = std.ChildProcess.exec(.{
-            .allocator = ally,
-            .argv = &.{
-                "python",
-                generator_script,
-                "-p",
-                output_dir,
-                "-c",
-                "dummy_CENTER",
-                "-l",
-                "dummy_LEFTFOOTER",
-                "-s",
-                std.fs.path.stem(xml_file),
-                xml_file,
-            },
-        }) catch @panic("failed to exec child process");
-        // std.log.debug("try to convert {s} to .c file", .{xml_file});
-        // std.log.debug("conversion stdout: {s}", .{r.stdout});
-        // std.log.debug("conversion sterr: {s}", .{r.stderr});
-        defer {
-            ally.free(r.stderr);
-            ally.free(r.stdout);
-        }
+        const cmd = b.addSystemCommand(&.{
+            "python",
+            generator_script,
+            "-p",
+            output_dir,
+            "-c",
+            "dummy_CENTER",
+            "-l",
+            "dummy_LEFTFOOTER",
+            "-s",
+            std.fs.path.stem(xml_file),
+            xml_file,
+        });
+        step.dependOn(&cmd.step);
     }
 }
 
