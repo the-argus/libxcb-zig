@@ -10,6 +10,18 @@ pub fn build(b: *std.Build) !void {
     // TODO: support passing settings such as this to libxau. currently this specific setting can be passed by setting the XPROTO_INCLUDE_DIR environment variable
     // const xproto_header_dir = b.option([]const u8, "xproto_header_dir", "header directory to use for libX11");
 
+    // TODO: get rid of this. this is duplicated code from libxau build.zig
+    const xproto_header_dir = b.option([]const u8, "xproto_header_dir", "Include directory to append, intended to contain X11/Xfuncproto.h") orelse block: {
+        var envmap = std.process.getEnvMap(b.allocator) catch @panic("OOM");
+        defer envmap.deinit();
+
+        if (envmap.get("XPROTO_INCLUDE_DIR")) |dir| {
+            break :block b.allocator.dupe(u8, dir) catch @panic("OOM");
+        }
+
+        break :block null;
+    };
+
     var flags = std.ArrayList([]const u8).init(b.allocator);
     defer flags.deinit();
 
@@ -98,9 +110,13 @@ pub fn build(b: *std.Build) !void {
     }, b.allocator.dupe([]const u8, flags.items) catch @panic("OOM"));
 
     lib.addIncludePath(.{ .path = "src" });
-    // if (xproto_header_dir) |dir| lib.addIncludePath(.{ .path = dir });
+    if (xproto_header_dir) |dir| lib.addIncludePath(.{ .path = dir });
 
-    const xau_dep = b.dependency("xau", .{
+    const xau_dep = if (xproto_header_dir) |dir| b.dependency("xau", .{
+        .target = target,
+        .optimize = optimize,
+        .xproto_header_dir = dir,
+    }) else b.dependency("xau", .{
         .target = target,
         .optimize = optimize,
     });
