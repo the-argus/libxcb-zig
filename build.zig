@@ -81,6 +81,11 @@ pub fn build(b: *std.Build) !void {
         lib.installed_headers.append(&install_file.step) catch @panic("OOM");
     }
 
+    // lib also needs to depend on generated headers. the installed_headers
+    // has it so the lib install step will depend on it, but the actual compilation
+    // of the library also needs to wait until generation
+    lib.step.dependOn(generated_headers_step);
+
     lib.addCSourceFiles(&.{
         "src/xcb_auth.c",
         "src/xcb_conn.c",
