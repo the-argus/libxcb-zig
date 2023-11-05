@@ -6,6 +6,7 @@ pub fn build(b: *std.Build) !void {
 
     const xcb_queue_buffer_size = b.option(u64, "xcb_queue_buffer_size", "i dont know what this is. someone who knows xorg please document") orelse 16384;
     const iov_max = b.option(u64, "iov_max", "i dont know what this is. someone who knows xorg please document") orelse 16;
+    const use_pkg_config_for_xproto = b.option(bool, "use_pkg_config_to_find_xproto_spec", "Whether to invoke pkg-config to find the location of xproto XML files") orelse false;
     const xorgproto_header_dir = b.option([]const u8, "xproto_header_dir", "header directory to use for libX11") orelse "";
 
     var flags = std.ArrayList([]const u8).init(b.allocator);
@@ -17,7 +18,8 @@ pub fn build(b: *std.Build) !void {
     flags.append(iov_max_flage) catch @panic("OOM");
 
     // get the location of the xproto xml files for C source file generation
-    const generated = getGeneratedFiles(b, getXcbIncludeDir(b.allocator)) catch @panic("OOM");
+    const xml_file_location = if (use_pkg_config_for_xproto) getXcbIncludeDir(b.allocator) else b.build_root.join(b.allocator, &.{"xml_fallback"}) catch @panic("OOM");
+    const generated = getGeneratedFiles(b, xml_file_location) catch @panic("OOM");
     const generated_c_sources = generated.c_files;
     const generated_headers = generated.header_files;
 
@@ -49,7 +51,7 @@ pub fn build(b: *std.Build) !void {
     }
 
     {
-        const xml_files_abs_paths = getAbsolutePathsToXMLFiles(b.allocator, getXcbIncludeDir(b.allocator)) catch |err| {
+        const xml_files_abs_paths = getAbsolutePathsToXMLFiles(b.allocator, xml_file_location) catch |err| {
             std.log.err("failed with {any}", .{err});
             @panic("failed to generate absolute paths to xml files");
         };
