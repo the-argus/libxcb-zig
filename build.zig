@@ -1,15 +1,5 @@
 const std = @import("std");
 
-var xcb_proto_include_dir: ?[]const u8 = null;
-
-pub fn regenerateHeaders(b: *std.Build) void {
-    if (xcb_proto_include_dir == null) {
-        @panic("calling regenerateHeaders before build() was called. unexpected");
-    }
-    const ignore = makeCSourceFromXproto(b, xcb_proto_include_dir.?) catch @panic("OOM");
-    _ = ignore;
-}
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -27,24 +17,20 @@ pub fn build(b: *std.Build) void {
     flags.append(iov_max_flage) catch @panic("OOM");
 
     // get the location of the xproto xml files for C source file generation
-    const generated_c_sources = block: {
-        const r = std.ChildProcess.exec(.{
-            .allocator = b.allocator,
-            .argv = &.{ "pkg-config", "--variable=xcbincludedir", "xcb-proto" },
-        }) catch @panic("failed to exec child process");
-        defer {
-            b.allocator.free(r.stderr);
-            b.allocator.free(r.stdout);
-        }
-        const index = std.mem.indexOfScalar(u8, r.stdout, '\n') orelse r.stdout.len - 1;
-        xcb_proto_include_dir = r.stdout[0..index];
-        break :block makeCSourceFromXproto(b, xcb_proto_include_dir.?) catch @panic("OOM");
-    };
+    const generated_c_sources = getGeneratedFiles(b, getXcbIncludeDir(b.allocator)) catch @panic("OOM");
 
     const lib = b.addStaticLibrary(.{
         .name = "xcb",
         .target = target,
         .optimize = optimize,
+    });
+
+    var generate_c_sources_step = b.allocator.create(std.Build.Step) catch @panic("Allocation failure, probably OOM");
+    generate_c_sources_step.* = std.Build.Step.init(.{
+        .id = .custom,
+        .name = "c_source_generation_step",
+        .makeFn = fileGenerationMakeFn,
+        .owner = b,
     });
 
     lib.addCSourceFiles(&.{
@@ -79,50 +65,39 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(lib);
 }
 
-/// Goes to the xml directory and creates C source files from each XML file
-/// returns a slice of the generated C files
-fn makeCSourceFromXproto(b: *std.Build, xml_files_dir: []const u8) ![]const []const u8 {
+fn fileGenerationMakeFn(step: *std.Build.Step, prog_node: *std.Progress.Node) anyerror!void {
+    _ = prog_node;
+    const xml_files_abs_paths = try getAbsolutePathsToXMLFiles(step.owner.allocator, getXcbIncludeDir(step.*.owner.allocator));
+    try generateSourceFiles(step.owner.allocator, try getOutputDirectory(step.*.owner), xml_files_abs_paths);
+}
 
-    // basically do the ls command
-    var xml_files_abs_paths = block: {
-        var xml_file_names = std.ArrayList([]const u8).init(b.allocator);
-        defer xml_file_names.deinit();
-        var xml_dir_handle = std.fs.openIterableDirAbsolute(xml_files_dir, .{}) catch |err| {
-            std.log.err("failed to open {s}, the expected location of the xml files for xproto generation. Error {any}", .{ xml_files_dir, err });
-            @panic("Directory open failed");
-        };
-        var walker = try xml_dir_handle.walk(b.allocator);
-        defer {
-            walker.deinit();
-            xml_dir_handle.close();
-        }
-
-        // FIXME: should catch other errors. returning a non-memory related error will still cause a @panic("OOM")
-        while (try walker.next()) |entry| {
-            if (entry.kind != .file) {
-                std.log.warn("found non-file in xml files directory of type {any}: {s}", .{ entry.kind, entry.path });
-                continue;
-            }
-            if (std.mem.eql(u8, std.fs.path.extension(entry.path), ".xml")) {
-                try xml_file_names.append(try std.fs.path.join(b.allocator, &.{ xml_files_dir, entry.path }));
-            }
-        }
-        break :block try xml_file_names.toOwnedSlice();
-    };
+/// Figures out what the files that result from the xml files will be. these files
+/// are not generated yet!
+fn getGeneratedFiles(b: *std.Build, xml_files_dir: []const u8) ![]const []const u8 {
+    const xml_files_abs_paths = try getAbsolutePathsToXMLFiles(b.allocator, xml_files_dir);
 
     // before generating files, create the output directory and change our CWD to it
-    const output_dir = try b.global_cache_root.join(b.allocator, &.{"libxcb_gen"});
-    std.fs.makeDirAbsolute(output_dir) catch |err| block: {
-        // TODO: maybe delete the old output and recreate it every time?
-        switch (err) {
-            std.os.MakeDirError.PathAlreadyExists => break :block,
-            else => return err,
-        }
-    };
+    const output_dir = try getOutputDirectory(b);
 
+    var generated_files = std.ArrayList([]const u8).init(b.allocator);
+    defer generated_files.deinit();
+
+    for (xml_files_abs_paths) |xml_file| {
+        const c_file = try std.fmt.allocPrint(b.allocator, "{s}/{s}.c", .{ output_dir, std.fs.path.stem(xml_file) });
+        try generated_files.append(c_file);
+    }
+
+    return generated_files.toOwnedSlice();
+}
+
+fn getOutputDirectory(b: *std.Build) ![]const u8 {
+    return try b.global_cache_root.join(b.allocator, &.{"libxcb_gen"});
+}
+
+fn generateSourceFiles(ally: std.mem.Allocator, output_dir: []const u8, xml_files_abs_paths: []const []const u8) !void {
     // grab original directory and return to it when the scope ends
-    const original_dir = try std.process.getCwdAlloc(b.allocator);
-    defer b.allocator.free(original_dir);
+    const original_dir = try std.process.getCwdAlloc(ally);
+    defer ally.free(original_dir);
     var output_dir_handle = try std.fs.openDirAbsolute(output_dir, .{});
     defer {
         output_dir_handle.close();
@@ -131,16 +106,23 @@ fn makeCSourceFromXproto(b: *std.Build, xml_files_dir: []const u8) ![]const []co
         o.close();
     }
 
-    const generator_script = try std.fs.path.join(b.allocator, &.{ original_dir, "src", "c_client.py" });
+    std.fs.makeDirAbsolute(output_dir) catch |err| block: {
+        // TODO: maybe delete the old output and recreate it every time?
+        switch (err) {
+            std.os.MakeDirError.PathAlreadyExists => break :block,
+            else => return err,
+        }
+    };
 
     // switch into the output dir
     output_dir_handle.setAsCwd() catch @panic("error setting path to CWD");
-    std.log.info("generating xcb headers into {s}", .{output_dir});
+
+    const generator_script = try std.fs.path.join(ally, &.{ "src", "c_client.py" });
 
     // run the generator script on all the xml files
     for (xml_files_abs_paths) |xml_file| {
         const r = std.ChildProcess.exec(.{
-            .allocator = b.allocator,
+            .allocator = ally,
             .argv = &.{
                 "python",
                 generator_script,
@@ -159,18 +141,51 @@ fn makeCSourceFromXproto(b: *std.Build, xml_files_dir: []const u8) ![]const []co
         // std.log.debug("conversion stdout: {s}", .{r.stdout});
         // std.log.debug("conversion sterr: {s}", .{r.stderr});
         defer {
-            b.allocator.free(r.stderr);
-            b.allocator.free(r.stdout);
+            ally.free(r.stderr);
+            ally.free(r.stdout);
         }
     }
+}
 
-    var generated_files = std.ArrayList([]const u8).init(b.allocator);
-    defer generated_files.deinit();
-
-    for (xml_files_abs_paths) |xml_file| {
-        const c_file = try std.fmt.allocPrint(b.allocator, "{s}/{s}.c", .{ output_dir, std.fs.path.stem(xml_file) });
-        try generated_files.append(c_file);
+/// returns a slice of strings which are the absolute paths to all the XML files in directory xml_files_dir
+fn getAbsolutePathsToXMLFiles(ally: std.mem.Allocator, xml_files_dir: []const u8) ![]const []const u8 {
+    // basically do the ls command
+    var xml_file_names = std.ArrayList([]const u8).init(ally);
+    defer xml_file_names.deinit();
+    var xml_dir_handle = std.fs.openIterableDirAbsolute(xml_files_dir, .{}) catch |err| {
+        std.log.err("failed to open {s}, the expected location of the xml files for xproto generation. Error {any}", .{ xml_files_dir, err });
+        @panic("Directory open failed");
+    };
+    var walker = try xml_dir_handle.walk(ally);
+    defer {
+        walker.deinit();
+        xml_dir_handle.close();
     }
 
-    return generated_files.toOwnedSlice();
+    // FIXME: should catch other errors. returning a non-memory related error will still cause a @panic("OOM")
+    while (try walker.next()) |entry| {
+        if (entry.kind != .file) {
+            std.log.warn("found non-file in xml files directory of type {any}: {s}", .{ entry.kind, entry.path });
+            continue;
+        }
+        if (std.mem.eql(u8, std.fs.path.extension(entry.path), ".xml")) {
+            try xml_file_names.append(try std.fs.path.join(ally, &.{ xml_files_dir, entry.path }));
+        }
+    }
+    return try xml_file_names.toOwnedSlice();
+}
+
+/// Makes a call to pkg-config to get the include directory of xcb-proto
+fn getXcbIncludeDir(ally: std.mem.Allocator) []const u8 {
+    const r = std.ChildProcess.exec(.{
+        .allocator = ally,
+        .argv = &.{ "pkg-config", "--variable=xcbincludedir", "xcb-proto" },
+    }) catch @panic("failed to exec child process");
+    defer {
+        ally.free(r.stderr);
+        ally.free(r.stdout);
+    }
+    const index = std.mem.indexOfScalar(u8, r.stdout, '\n') orelse r.stdout.len - 1;
+    const dir = r.stdout[0..index];
+    return ally.dupe(u8, dir) catch @panic("OOM");
 }
