@@ -46,11 +46,15 @@ pub fn build(b: *std.Build) !void {
     lib.installHeader("src/xcbint.h", "xcbint.h");
     lib.installHeader("src/xcb_windefs.h", "xcb_windefs.h");
 
-    // install all the generated header files directly in include/
-    for (generated_headers) |header_path| {
-        lib.installHeader(header_path, std.fs.path.basename(header_path));
-    }
+    // make dummy step
+    var generated_headers_step = b.allocator.create(std.Build.Step) catch @panic("Allocation failure, probably OOM");
+    generated_headers_step.* = std.Build.Step.init(.{
+        .id = .custom,
+        .name = "cc_file",
+        .owner = b,
+    });
 
+    // make that step depend on the generation of the headers
     {
         const xml_files_abs_paths = getAbsolutePathsToXMLFiles(b.allocator, xml_file_location) catch |err| {
             std.log.err("failed with {any}", .{err});
@@ -58,7 +62,7 @@ pub fn build(b: *std.Build) !void {
         };
         addSystemCommandsForGeneratingSourceFiles(
             b,
-            &lib.step,
+            generated_headers_step,
             b.allocator,
             getOutputDirectory(b) catch @panic("OOM"),
             xml_files_abs_paths,
@@ -66,6 +70,15 @@ pub fn build(b: *std.Build) !void {
             std.log.err("failed with {any}", .{err});
             @panic("failed while generating source files");
         };
+    }
+
+    // install all the generated header files directly in include/
+    for (generated_headers) |header_path| {
+        const install_file = b.addInstallHeaderFile(header_path, std.fs.path.basename(header_path));
+        b.getInstallStep().dependOn(&install_file.step);
+        // you have to generate the header file before this install step can run
+        install_file.step.dependOn(generated_headers_step);
+        lib.installed_headers.append(&install_file.step) catch @panic("OOM");
     }
 
     lib.addCSourceFiles(&.{
